@@ -1,0 +1,175 @@
+---
+title: "The Influence of Transmission Type on MPG"
+author: "Andrey Bondarenko"
+date: "23 May 2015"
+output: pdf_document
+---
+
+Executive Summary
+-
+Motor Trend magazine is interested in exploring the relationship between a set of variables (characteristics of cars) and miles per gallon (MPG). This report answers three questions:
+
+ 1. Is an automatic or manual transmission better for MPG?
+ 2. What`s the quantified difference between automatic and manual transmissions?
+ 3. What`s the relationship between a set of variables and MPG?
+ 
+This research uses a `mtcars` dataset.
+ 
+Data Processing
+-
+We need some variables as factors for the analysis:
+```{r}
+mtcars$cyl  <- factor(mtcars$cyl)
+mtcars$vs   <- factor(mtcars$vs)
+mtcars$am   <- factor(mtcars$am, labels = c("Automatic", "Manual"))
+mtcars$gear <- factor(mtcars$gear)
+mtcars$carb <- factor(mtcars$carb)
+```
+
+Exploratory Data Analysis
+-
+Than we could explore some relations in the dataset. Figure 1 in Appendix shows, that manual transmission cars have higher MPG than automatic. It's evident, that other variables (regressors) also have an influence on MPG. You could see this on Figure 2: for example, the higher displacement a car has, the less miles you can drive. There are also some correlation coefficients on this figure and you could discover, that a weight of a car has more influence on MPG, than a displacement. In fact, a weight is the highest correlated predictor for MPG.
+
+Regression analysis
+-
+One of the goals is to investigate the relation between two variables: `mpg` and `am`. This problem could be solved by ***simple linear regression***:
+```{r}
+fit0 <- lm(mpg ~ am, data = mtcars)
+summary(fit0)$coef
+```
+An intercept here is the mean MPG for automatic transmissions (you could see it on Figure 1), and the slope is the mean increase in MPG for manual transmissions. To calculate the 95% confidence interval for the mean MPG difference we use t-statistic:
+```{r}
+n <- length(mtcars$mpg)
+alpha <- 0.05
+tstat <- qt(1 - alpha/2, n - 2)
+B0 <-   summary(fit0)$coef[2,1]
+seB0 <- summary(fit0)$coef[2,2]
+B0 + c(-1, 1) * (seB0 * tstat)
+```
+
+
+Let's turn to ***multivarible regression*** to explore an influence of other predictors. By chosing the model via step-wise model selection (AIC algorithm) we select significant predictors for the analysis:
+```{r,results='hide'}
+library(MASS)
+fit1 <- lm(mpg~., data = mtcars)
+fit2 <- stepAIC(fit1, direction = "both")
+```
+The best model `fit2` that includes `cyl`, `wt` and `hp` as confounders and `am` as the independent variable is shown below:
+```{r}
+summary(fit2)
+```
+
+
+
+Conclusions
+-
+
+ 1. A manual transmission is better for MPG.
+ 2. The mean increase in mpg for manual transmission is 7.245 gallons.
+ 3. Number of cyllinders, weigth and horsepower have the biggest influence on MPG: the smaller they are, the greater is MPG. This result is shown on Figure 4.
+
+
+**Appendix**
+============
+
+Figure 1. Bar plot.
+-
+```{r}
+library(ggplot2)
+g <- ggplot(mtcars, aes(x = am, y = mpg, color = am)) + 
+    geom_boxplot(outlier.colour = "green") +
+    labs(title = "Miles per Gallon by Transmission Type\n") +
+    theme(axis.title = element_blank(), legend.position = 'none',
+          title = element_text(size=10))
+print(g)
+```
+\newpage
+
+Figure 2. Pairs plot.
+-
+```{r, message=FALSE,fig.align='center',fig.height=7}
+library(GGally)
+g <- ggpairs(mtcars[,c("mpg","cyl","disp","wt")], 
+             diag = list(continuous = "blank"), title = "Pairs plot")
+print(g)
+```
+
+Figure 3. Risidual plots.
+-
+```{r, echo=FALSE,fig.align='center'}
+par(mfrow=c(2, 2))
+plot(fit2)#, which = c(1:1))
+```
+
+
+Figure 4. MPG with the most correlated predictors.
+-
+```{r, echo=FALSE,fig.height=4,fig.align='center'}
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+    library(grid)
+    
+    # Make a list from the ... arguments and plotlist
+    plots <- c(list(...), plotlist)
+    
+    numPlots = length(plots)
+    
+    # If layout is NULL, then use 'cols' to determine layout
+    if (is.null(layout)) {
+        # Make the panel
+        # ncol: Number of columns of plots
+        # nrow: Number of rows needed, calculated from # of cols
+        layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                         ncol = cols, nrow = ceiling(numPlots/cols))
+    }
+    
+    if (numPlots==1) {
+        print(plots[[1]])
+        
+    } else {
+        # Set up the page
+        grid.newpage()
+        pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+        
+        # Make each plot, in the correct location
+        for (i in 1:numPlots) {
+            # Get the i,j matrix positions of the regions that contain this subplot
+            matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+            
+            print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                            layout.pos.col = matchidx$col))
+        }
+    }
+}
+
+mtcars$cyl  <- as.numeric(levels(mtcars$cyl))[mtcars$cyl]
+
+g1 <- ggplot(mtcars, aes(x = wt, y = mpg)) +
+    geom_point(aes(y = mpg, x = wt,  colour = wt)) +
+    geom_smooth(method = "lm")
+
+g2 <- ggplot(mtcars, aes(x = cyl, y = mpg)) +
+    geom_point(aes(y = mpg, x = cyl, colour = cyl)) +
+    geom_smooth(method = "lm")
+
+g3 <- ggplot(mtcars, aes(x = hp, y = mpg)) +
+    geom_point(aes(y = mpg, x = hp,  colour = hp)) +
+    geom_smooth(method = "lm")
+
+multiplot(g1, g2, g3, cols = 2)
+
+```
+
+
+
+
+
+
+
+
+TODO
+-
+paste somewhere this metod:
+```{r}
+lapply(list(fit, fit2), coef)
+
+```
